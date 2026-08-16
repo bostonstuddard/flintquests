@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "flintquests",
+  "version": "0.1.22-a",
+  "name": "Flint Quests",
+  "description": "A lightweight in-game quest framework built for Project Flint progression.",
+  "authors": [
+    "ImKas"
+  ],
+  "contact": {},
+  "license": "LicenseRef-FlintQuests-Custom",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.projectflint.flintquests.FlintQuests"
+    ],
+    "client": [
+      "com.projectflint.flintquests.client.FlintQuestsClient"
+    ],
+    "modmenu": [
+      "com.projectflint.flintquests.client.FlintQuestsModMenu"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "minecraft": "1.21.11",
+    "java": ">=21",
+    "fabric-api": ">=0.141.6+1.21.11"
+  },
+  "icon": "assets/flintquests/icon.png"
+}
