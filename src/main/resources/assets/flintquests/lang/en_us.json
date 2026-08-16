@@ -1,0 +1,8 @@
+{
+  "key.category.flintquests.controls": "Flint Quests",
+  "key.flintquests.open": "Open Flint Quests",
+  "key.flintquests.link_nodes": "Link Quest Nodes (Hold)",
+  "key.flintquests.move_nodes": "Move Quest Nodes (Hold)",
+  "key.flintquests.toggle_editing": "Toggle Quest Editing",
+  "key.flintquests.toggle_editing_modifier": "Toggle Editing Modifier (Hold)"
+}
