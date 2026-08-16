@@ -1,3 +1,20 @@
-License Information:
-Allowed: Decompiling, reading code, using the API, and bundling/shading the unmodified .jar inside their own mod distribution.
-Forbidden: Copying, modifying, or re-uploading the source code or assets as a standalone project under another name.
+Flint Quests Custom License
+Copyright (c) 2026 ImKas
+
+All rights are reserved except for the permissions expressly granted below.
+
+ALLOWED
+
+1. Decompiling Flint Quests for the purpose of reading or inspecting its code.
+2. Reading and studying Flint Quests code.
+3. Using the public Flint Quests API from another mod or project.
+4. Bundling or shading the unmodified Flint Quests .jar inside another mod distribution.
+
+FORBIDDEN
+
+1. Copying, modifying, or re-uploading Flint Quests source code as a standalone project under another name.
+2. Copying, modifying, or re-uploading Flint Quests assets as a standalone project under another name.
+
+Bundling or shading permission applies only to an unmodified official Flint Quests .jar. Using the API does not transfer ownership of Flint Quests source code or assets.
+
+Third-party components, libraries, or referenced works remain subject to their own licenses where applicable.
