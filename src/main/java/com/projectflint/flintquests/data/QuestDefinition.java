@@ -18,6 +18,7 @@ public final class QuestDefinition {
 	public CompletionMode taskMode = CompletionMode.ALL;
 	public List<String> dependencies = new ArrayList<>();
 	public List<QuestTask> tasks = new ArrayList<>();
+	public List<QuestReward> rewards = new ArrayList<>();
 
 	public void normalize() {
 		if (id == null || id.isBlank()) id = "flintquests:new_quest";
@@ -49,6 +50,11 @@ public final class QuestDefinition {
 			if (task != null) task.normalize(i);
 		}
 		tasks.removeIf(task -> task == null);
+		if (rewards == null) rewards = new ArrayList<>();
+		for (QuestReward reward : rewards) {
+			if (reward != null) reward.normalize();
+		}
+		rewards.removeIf(reward -> reward == null || reward.item == null || reward.item.isBlank() || reward.item.equals("minecraft:air"));
 	}
 
 	public static String normalizeIdPath(String value) {

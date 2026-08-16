@@ -4,9 +4,10 @@ import com.projectflint.flintquests.engine.QuestEngine;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * Public integration surface for Project Flint and other mods.
- * Keep this class source-compatible whenever possible.
+ * Compatibility facade kept for integrations written against Flint Quests 1.0 and earlier.
+ * New integrations should use {@link FlintQuestAPI}.
  */
+@Deprecated(forRemoval = false)
 public final class FlintQuestHooks {
     private FlintQuestHooks() {
     }
@@ -16,10 +17,11 @@ public final class FlintQuestHooks {
     }
 
     public static void trigger(ServerPlayer player, String eventId, int amount) {
+        if (player == null || eventId == null || amount <= 0) return;
         QuestEngine.incrementCustomEvent(player, eventId, amount);
     }
 
     public static boolean isQuestComplete(ServerPlayer player, String questId) {
-        return QuestEngine.isCompleted(player, questId);
+        return FlintQuestAPI.isQuestComplete(player, questId);
     }
 }

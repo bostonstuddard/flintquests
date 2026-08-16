@@ -8,6 +8,7 @@ import com.projectflint.flintquests.data.QuestDefinition;
 import com.projectflint.flintquests.data.QuestNodeShape;
 import com.projectflint.flintquests.data.QuestRepository;
 import com.projectflint.flintquests.network.QuestProgressRequestC2SPayload;
+import com.projectflint.flintquests.network.QuestClaimAllRewardsC2SPayload;
 import com.projectflint.flintquests.theme.QuestTheme;
 import com.projectflint.flintquests.theme.QuestThemeManager;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
@@ -136,6 +137,20 @@ public final class QuestBookScreen extends Screen {
 		expandParents(selectedCategory);
 	}
 
+	private boolean categoryHasRewards() {
+		return QuestRepository.all().stream()
+				.anyMatch(quest -> normalizeCategory(quest.chapter).equals(selectedCategory)
+						&& quest.rewards != null && !quest.rewards.isEmpty());
+	}
+
+	private boolean categoryHasClaimableRewards() {
+		return QuestRepository.all().stream()
+				.anyMatch(quest -> normalizeCategory(quest.chapter).equals(selectedCategory)
+						&& quest.rewards != null && !quest.rewards.isEmpty()
+						&& ClientQuestProgress.questComplete(quest.id)
+						&& !ClientQuestProgress.rewardClaimed(quest.id));
+	}
+
 	private boolean editingEnabled() {
 		return ConfigManager.devToolsEnabled();
 	}
@@ -184,6 +199,17 @@ public final class QuestBookScreen extends Screen {
 
 		buildSidebar();
 		rebuildNodeViews();
+
+		if (categoryHasRewards()) {
+			Button claimAll = Button.builder(Component.literal("Claim All"), button -> {
+				if (minecraft != null && minecraft.player != null) {
+					ClientPlayNetworking.send(new QuestClaimAllRewardsC2SPayload(selectedCategory));
+					button.active = false;
+				}
+			}).bounds(width / 2 - 42, height - 21, 84, 18).build();
+			claimAll.active = categoryHasClaimableRewards();
+			addRenderableWidget(claimAll);
+		}
 
 		addRenderableWidget(Button.builder(Component.literal("⚙"), button ->
 				minecraft.setScreen(new FlintQuestConfigScreen(this)))
@@ -692,7 +718,7 @@ public final class QuestBookScreen extends Screen {
 
 
 			ItemStack stack = QuestIconHelper.stackFor(node.quest());
-			graphics.renderItem(stack, node.centerX() - 8, node.centerY() - 8);
+			renderScaledNodeItem(graphics, stack, node.centerX(), node.centerY());
 
 			if (node.quest().id.equals(dependencySourceId)) {
 				QuestNodeShape sourceShape = node.quest().nodeShape == null ? QuestNodeShape.SQUARE : node.quest().nodeShape;
@@ -740,6 +766,15 @@ public final class QuestBookScreen extends Screen {
 		if (editingEnabled() && !editorNotice.isBlank() && System.currentTimeMillis() < editorNoticeUntil) {
 			graphics.drawString(font, Component.literal(editorNotice), 6, height - 16, theme.labelTextColor(), false);
 		}
+	}
+
+	private void renderScaledNodeItem(GuiGraphics graphics, ItemStack stack, int centerX, int centerY) {
+		float scale = (float) zoom;
+		graphics.pose().pushMatrix();
+		graphics.pose().translate(centerX, centerY);
+		graphics.pose().scale(scale, scale);
+		graphics.renderItem(stack, -8, -8);
+		graphics.pose().popMatrix();
 	}
 
 	private List<FormattedCharSequence> buildQuestTooltip(QuestDefinition quest) {

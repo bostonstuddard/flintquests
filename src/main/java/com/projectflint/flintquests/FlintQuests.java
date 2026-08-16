@@ -1,5 +1,6 @@
 package com.projectflint.flintquests;
 
+import com.projectflint.flintquests.api.QuestEventRegistry;
 import com.projectflint.flintquests.command.FlintQuestCommands;
 import com.projectflint.flintquests.config.ConfigManager;
 import com.projectflint.flintquests.data.CategoryRepository;
@@ -21,6 +22,7 @@ public final class FlintQuests implements ModInitializer {
         ConfigManager.load();
         QuestRepository.load();
         CategoryRepository.load();
+        QuestEventRegistry.loadIntegrationEntrypoints();
         QuestNetworking.register();
         QuestEngine.register();
         FlintQuestCommands.register();
@@ -28,6 +30,7 @@ public final class FlintQuests implements ModInitializer {
         ServerLifecycleEvents.SERVER_STOPPING.register(ProgressManager::saveAll);
         ServerLifecycleEvents.SERVER_STOPPED.register(server -> ProgressManager.clear());
 
-        LOGGER.info("Flint Quests initialized with {} quest(s).", QuestRepository.all().size());
+        LOGGER.info("Flint Quests initialized with {} quest(s) and {} registered custom event(s).",
+                QuestRepository.all().size(), QuestEventRegistry.all().size());
     }
 }

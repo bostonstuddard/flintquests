@@ -18,6 +18,8 @@ public final class QuestNetworking {
 		PayloadTypeRegistry.playS2C().register(QuestCompletedS2CPayload.ID, QuestCompletedS2CPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(QuestProgressRequestC2SPayload.ID, QuestProgressRequestC2SPayload.CODEC);
 		PayloadTypeRegistry.playC2S().register(QuestCheckmarkC2SPayload.ID, QuestCheckmarkC2SPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(QuestClaimRewardC2SPayload.ID, QuestClaimRewardC2SPayload.CODEC);
+		PayloadTypeRegistry.playC2S().register(QuestClaimAllRewardsC2SPayload.ID, QuestClaimAllRewardsC2SPayload.CODEC);
 
 		ServerPlayNetworking.registerGlobalReceiver(QuestProgressRequestC2SPayload.ID, (payload, context) ->
 				sendProgress(context.player()));
@@ -25,6 +27,14 @@ public final class QuestNetworking {
 		ServerPlayNetworking.registerGlobalReceiver(QuestCheckmarkC2SPayload.ID, (payload, context) -> {
 			boolean changed = QuestEngine.checkmark(context.player(), payload.questId(), payload.taskId());
 			if (!changed) sendProgress(context.player());
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(QuestClaimRewardC2SPayload.ID, (payload, context) -> {
+			if (!QuestEngine.claimReward(context.player(), payload.questId())) sendProgress(context.player());
+		});
+
+		ServerPlayNetworking.registerGlobalReceiver(QuestClaimAllRewardsC2SPayload.ID, (payload, context) -> {
+			if (QuestEngine.claimAllRewards(context.player(), payload.categoryId()) == 0) sendProgress(context.player());
 		});
 	}
 

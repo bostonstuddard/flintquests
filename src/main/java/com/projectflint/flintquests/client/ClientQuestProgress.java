@@ -33,6 +33,11 @@ public final class ClientQuestProgress {
         return task != null && task.complete;
     }
 
+    public static boolean rewardClaimed(String questId) {
+        QuestProgress progress = data.quests.get(questId);
+        return progress != null && progress.rewardClaimed;
+    }
+
     public static void markQuestComplete(String questId) {
         QuestProgress progress = data.quests.computeIfAbsent(questId, ignored -> new QuestProgress());
         progress.complete = true;

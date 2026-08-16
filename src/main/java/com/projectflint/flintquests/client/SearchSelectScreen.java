@@ -1,5 +1,7 @@
 package com.projectflint.flintquests.client;
 
+import com.projectflint.flintquests.api.FlintQuestAPI;
+import com.projectflint.flintquests.api.QuestEventDefinition;
 import com.projectflint.flintquests.data.CategoryRepository;
 import com.projectflint.flintquests.data.QuestCategoryDefinition;
 import com.projectflint.flintquests.data.QuestDefinition;
@@ -26,7 +28,8 @@ public final class SearchSelectScreen extends Screen {
         BLOCK,
         CATEGORY_PAGE,
         CATEGORY_ANY,
-        QUEST
+        QUEST,
+        CUSTOM_EVENT
     }
 
     private static final int VISIBLE_ROWS = 10;
@@ -69,6 +72,24 @@ public final class SearchSelectScreen extends Screen {
                     allEntries.add(new Entry(category.id, category.title + "  (" + category.id + ")")));
             case QUEST -> QuestRepository.all().forEach(quest ->
                     allEntries.add(new Entry(quest.id, quest.title + "  (" + quest.id + ")")));
+            case CUSTOM_EVENT -> FlintQuestAPI.getRegisteredEvents().forEach(event -> {
+                String provider = event.providerName().isBlank() ? event.providerId() : event.providerName();
+                String group = event.group().isBlank() ? "" : " / " + event.group();
+                String prefix = provider.isBlank() ? "" : provider + group + " — ";
+                String display = prefix + event.title() + "  (" + event.id() + ")";
+                String search = String.join(" ", event.id(), event.title(), event.description(), provider, event.group(), String.join(" ", event.tags()));
+                List<Component> tooltip = new ArrayList<>();
+                tooltip.add(Component.literal(event.title()));
+                if (!provider.isBlank()) tooltip.add(Component.literal("Provider: " + provider + group));
+                tooltip.add(Component.literal(event.id()));
+                if (!event.description().isBlank()) {
+                    tooltip.add(Component.empty());
+                    for (String line : event.description().replace("\r", "").split("\n", -1)) {
+                        tooltip.add(Component.literal(line));
+                    }
+                }
+                allEntries.add(new Entry(event.id(), display, search, event.icon(), List.copyOf(tooltip)));
+            });
         }
         allEntries.sort(Comparator.comparing(Entry::display, String.CASE_INSENSITIVE_ORDER));
         filtered.addAll(allEntries);
@@ -106,7 +127,8 @@ public final class SearchSelectScreen extends Screen {
         } else {
             for (Entry entry : allEntries) {
                 if (entry.id().toLowerCase(Locale.ROOT).contains(query)
-                        || entry.display().toLowerCase(Locale.ROOT).contains(query)) {
+                        || entry.display().toLowerCase(Locale.ROOT).contains(query)
+                        || entry.searchText().toLowerCase(Locale.ROOT).contains(query)) {
                     filtered.add(entry);
                 }
             }
@@ -181,6 +203,24 @@ public final class SearchSelectScreen extends Screen {
                 QuestDefinition quest = QuestRepository.get(filtered.get(index).id());
                 if (quest != null) graphics.renderItem(QuestIconHelper.stackFor(quest), left + 16, 70 + i * 22);
             }
+        } else if (kind == Kind.CUSTOM_EVENT) {
+            for (int i = 0; i < VISIBLE_ROWS; i++) {
+                int index = scrollOffset + i;
+                if (index >= filtered.size()) break;
+                Entry entry = filtered.get(index);
+                if (!entry.icon().isBlank()) graphics.renderItem(QuestIconHelper.stackFor(entry.icon()), left + 16, 70 + i * 22);
+            }
+        }
+
+        int hoverRow = (mouseY - 68) / 22;
+        if (mouseX >= left + 12 && mouseX < left + panelWidth - 12 && hoverRow >= 0 && hoverRow < VISIBLE_ROWS) {
+            int index = scrollOffset + hoverRow;
+            if (index >= 0 && index < filtered.size()) {
+                List<Component> tooltip = filtered.get(index).tooltip();
+                if (!tooltip.isEmpty()) {
+                    graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+                }
+            }
         }
     }
 
@@ -195,6 +235,9 @@ public final class SearchSelectScreen extends Screen {
         minecraft.setScreen(parent);
     }
 
-    private record Entry(String id, String display) {
+    private record Entry(String id, String display, String searchText, String icon, List<Component> tooltip) {
+        private Entry(String id, String display) {
+            this(id, display, id + " " + display, "", List.of());
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.projectflint.flintquests.data.CompletionMode;
 import com.projectflint.flintquests.data.QuestDefinition;
 import com.projectflint.flintquests.data.QuestNodeShape;
 import com.projectflint.flintquests.data.QuestRepository;
+import com.projectflint.flintquests.data.QuestReward;
 import com.projectflint.flintquests.data.QuestTask;
 import com.projectflint.flintquests.data.TaskType;
 import com.projectflint.flintquests.network.QuestProgressRequestC2SPayload;
@@ -29,7 +30,8 @@ public final class QuestEditorScreen extends Screen {
 		LOOK("Look"),
 		FLOW("Flow"),
 		RULES("Rules"),
-		TASK("Task");
+		TASK("Task"),
+		REWARD("Reward");
 
 		private final String title;
 
@@ -62,6 +64,10 @@ public final class QuestEditorScreen extends Screen {
 	private Button taskTypeButton;
 	private Button taskOptionalButton;
 	private Button targetSearchButton;
+
+	private EditBox rewardItemBox;
+	private EditBox rewardCountBox;
+	private int rewardIndex;
 	private String saveError = "";
 
 	private int row0;
@@ -101,14 +107,15 @@ public final class QuestEditorScreen extends Screen {
 			case FLOW -> buildFlowPage(layout);
 			case RULES -> buildRulesPage(layout);
 			case TASK -> buildTaskPage(layout);
+			case REWARD -> buildRewardPage(layout);
 		}
 		buildFooter(layout);
 	}
 
 	private void buildTabs(EditorLayout layout) {
 		int gap = 2;
-		int tabWidth = Math.max(38, (layout.panelWidth() - gap * 4) / 5);
 		EditorPage[] pages = EditorPage.values();
+		int tabWidth = Math.max(34, (layout.panelWidth() - gap * (pages.length - 1)) / pages.length);
 		for (int i = 0; i < pages.length; i++) {
 			EditorPage target = pages[i];
 			String label = target == page ? "[" + target.title + "]" : target.title;
@@ -247,6 +254,84 @@ public final class QuestEditorScreen extends Screen {
 		loadTaskFields();
 	}
 
+	private void buildRewardPage(EditorLayout layout) {
+		int x = layout.contentLeft();
+		int width = layout.contentWidth();
+		int y = layout.contentTop();
+		int navWidth = Math.min(62, Math.max(38, width / 6));
+
+		if (draft.rewards.isEmpty()) {
+			addRenderableWidget(Button.builder(Component.literal("+ Add Reward"), button -> addReward())
+					.bounds(x, y + 28, width, 20).build());
+			return;
+		}
+
+		addRenderableWidget(Button.builder(Component.literal("<"), button -> previousReward())
+				.bounds(x, layout.panelTop() + 5, navWidth, 18).build());
+		addRenderableWidget(Button.builder(Component.literal(">"), button -> nextReward())
+				.bounds(x + navWidth + 3, layout.panelTop() + 5, navWidth, 18).build());
+		addRenderableWidget(Button.builder(Component.literal("+"), button -> addReward())
+				.bounds(x + width - navWidth * 2 - 3, layout.panelTop() + 5, navWidth, 18).build());
+		addRenderableWidget(Button.builder(Component.literal("-"), button -> removeReward())
+				.bounds(x + width - navWidth, layout.panelTop() + 5, navWidth, 18).build());
+
+		row0 = y;
+		rewardItemBox = field(x, y + 11, width - 62, 18, draft.rewards.get(rewardIndex).item);
+		addRenderableWidget(Button.builder(Component.literal("Search"), button -> searchRewardItem())
+				.bounds(x + width - 56, y + 11, 56, 18).build());
+		y += 38;
+		row1 = y;
+		rewardCountBox = field(x, y + 11, Math.min(120, width), 18, Integer.toString(draft.rewards.get(rewardIndex).count));
+	}
+
+	private void addReward() {
+		saveRewardFields();
+		draft.rewards.add(new QuestReward("minecraft:diamond", 1));
+		rewardIndex = draft.rewards.size() - 1;
+		rebuildRewardPage();
+	}
+
+	private void removeReward() {
+		if (draft.rewards.isEmpty()) return;
+		draft.rewards.remove(rewardIndex);
+		rewardIndex = Math.max(0, Math.min(rewardIndex, draft.rewards.size() - 1));
+		rebuildRewardPage();
+	}
+
+	private void previousReward() {
+		saveRewardFields();
+		if (rewardIndex > 0) rewardIndex--;
+		rebuildRewardPage();
+	}
+
+	private void nextReward() {
+		saveRewardFields();
+		if (rewardIndex < draft.rewards.size() - 1) rewardIndex++;
+		rebuildRewardPage();
+	}
+
+	private void rebuildRewardPage() {
+		clearWidgets();
+		init();
+	}
+
+	private void searchRewardItem() {
+		saveRewardFields();
+		int selectedReward = rewardIndex;
+		minecraft.setScreen(new SearchSelectScreen(this, Component.literal("Choose Reward Item"), SearchSelectScreen.Kind.ITEM,
+				id -> {
+					if (selectedReward >= 0 && selectedReward < draft.rewards.size()) draft.rewards.get(selectedReward).item = id;
+				}));
+	}
+
+	private void saveRewardFields() {
+		if (draft.rewards.isEmpty() || rewardItemBox == null || rewardCountBox == null) return;
+		QuestReward reward = draft.rewards.get(rewardIndex);
+		reward.item = rewardItemBox.getValue().trim();
+		reward.count = parseInt(rewardCountBox.getValue(), 1);
+		reward.normalize();
+	}
+
 	private int compactRowStep(EditorLayout layout) {
 		int available = Math.max(100, layout.panelBottom() - layout.contentTop() - 2);
 		return Math.max(22, Math.min(34, available / 5));
@@ -286,6 +371,7 @@ public final class QuestEditorScreen extends Screen {
 			case FLOW -> saveFlowPage();
 			case RULES -> saveRulesPage();
 			case TASK -> saveTaskFields();
+			case REWARD -> saveRewardFields();
 		}
 	}
 
@@ -333,12 +419,16 @@ public final class QuestEditorScreen extends Screen {
 		SearchSelectScreen.Kind kind = switch (currentTaskType) {
 			case OBTAIN_ITEM, USE_ITEM -> SearchSelectScreen.Kind.ITEM;
 			case BREAK_BLOCK, INTERACT_BLOCK -> SearchSelectScreen.Kind.BLOCK;
+			case CUSTOM_EVENT -> SearchSelectScreen.Kind.CUSTOM_EVENT;
 			default -> null;
 		};
 		if (kind == null) return;
 		saveTaskFields();
 		int selectedTask = taskIndex;
-		minecraft.setScreen(new SearchSelectScreen(this, Component.literal("Choose Task Target"), kind,
+		Component pickerTitle = currentTaskType == TaskType.CUSTOM_EVENT
+				? Component.literal("Choose Registered Custom Event")
+				: Component.literal("Choose Task Target");
+		minecraft.setScreen(new SearchSelectScreen(this, pickerTitle, kind,
 				id -> draft.tasks.get(selectedTask).target = id));
 	}
 
@@ -396,7 +486,8 @@ public final class QuestEditorScreen extends Screen {
 		if (taskTypeButton != null) taskTypeButton.setMessage(Component.literal("Completion: " + friendlyTaskType(currentTaskType)));
 		if (taskOptionalButton != null) taskOptionalButton.setMessage(Component.literal(currentTaskOptional ? "Optional" : "Required"));
 		boolean searchableTarget = currentTaskType == TaskType.OBTAIN_ITEM || currentTaskType == TaskType.USE_ITEM
-				|| currentTaskType == TaskType.BREAK_BLOCK || currentTaskType == TaskType.INTERACT_BLOCK;
+				|| currentTaskType == TaskType.BREAK_BLOCK || currentTaskType == TaskType.INTERACT_BLOCK
+				|| currentTaskType == TaskType.CUSTOM_EVENT;
 		boolean hasTarget = currentTaskType != TaskType.CHECKMARK;
 		if (targetSearchButton != null) targetSearchButton.active = searchableTarget;
 		if (taskTargetBox != null) taskTargetBox.active = hasTarget;
@@ -409,7 +500,7 @@ public final class QuestEditorScreen extends Screen {
 			case BREAK_BLOCK -> "Break Block";
 			case USE_ITEM -> "Use Item";
 			case INTERACT_BLOCK -> "Interact With Block";
-			case CUSTOM_EVENT -> "Flint/Custom Event";
+			case CUSTOM_EVENT -> "Custom Event";
 			case CHECKMARK -> "Manual Checkmark";
 		};
 	}
@@ -520,6 +611,7 @@ public final class QuestEditorScreen extends Screen {
 			case FLOW -> renderFlowLabels(graphics, layout);
 			case RULES -> renderRulesLabels(graphics, layout);
 			case TASK -> renderTaskLabels(graphics, layout);
+			case REWARD -> renderRewardLabels(graphics, layout);
 		}
 		if (!saveError.isBlank()) {
 			graphics.drawCenteredString(font, Component.literal(saveError), width / 2, Math.max(24, layout.footerY() - 10), QuestThemeManager.current().errorTextColor());
@@ -571,11 +663,24 @@ public final class QuestEditorScreen extends Screen {
 				: switch (currentTaskType) {
 					case OBTAIN_ITEM, USE_ITEM -> "Target item";
 					case BREAK_BLOCK, INTERACT_BLOCK -> "Target block";
-					case CUSTOM_EVENT -> "Custom API event ID";
+					case CUSTOM_EVENT -> "Registered/custom event ID";
 					case CHECKMARK -> "Manual Checkmark: no target";
 				};
 		label(graphics, targetLabel, x, row3);
 		label(graphics, currentTaskType == TaskType.CHECKMARK ? "Count fixed at 1" : "Required count", x, row4);
+	}
+
+	private void renderRewardLabels(GuiGraphics graphics, EditorLayout layout) {
+		int x = layout.contentLeft();
+		if (draft.rewards.isEmpty()) {
+			graphics.drawCenteredString(font, Component.literal("No reward configured — rewards are optional."), width / 2,
+				layout.contentTop(), QuestThemeManager.current().mutedTextColor());
+			return;
+		}
+		graphics.drawCenteredString(font, Component.literal("Reward " + (rewardIndex + 1) + " / " + draft.rewards.size()), width / 2,
+				layout.panelTop() + 9, QuestThemeManager.current().accentTextColor());
+		label(graphics, "Reward item", x, row0);
+		label(graphics, "Amount", x, row1);
 	}
 
 	private EditorLayout layout() {
@@ -629,6 +734,8 @@ public final class QuestEditorScreen extends Screen {
 		for (QuestTask task : source.tasks) {
 			copy.tasks.add(new QuestTask(task.id, task.type, task.label, task.target, task.count, task.optional));
 		}
+		copy.rewards = new ArrayList<>();
+		for (QuestReward reward : source.rewards) copy.rewards.add(new QuestReward(reward.item, reward.count));
 		return copy;
 	}
 }

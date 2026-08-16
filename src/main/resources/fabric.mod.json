@@ -3,7 +3,7 @@
   "id": "flintquests",
   "version": "${version}",
   "name": "Flint Quests",
-  "description": "A lightweight in-game quest framework built for Project Flint progression.",
+  "description": "A developer-friendly in-game quest framework with visual editing, extensible custom events, rewards, themes, and portable quest packs.",
   "authors": [
     "ImKas"
   ],

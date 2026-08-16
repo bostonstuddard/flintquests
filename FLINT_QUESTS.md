@@ -4,9 +4,7 @@ This file is the persistent design document for Flint Quests. Future work should
 
 ## Premise
 
-Project Flint needs an explicit, quest-heavy progression guide that can tell the player exactly what to do while still supporting Project Flint mechanics that vanilla advancements do not naturally understand.
-
-Flint Quests exists to provide that system as a small, Project-Flint-focused companion mod first. Once the data format, editor, networking and player experience are stable, the intention is to merge the package cleanly into the main Project Flint mod.
+Flint Quests is a general-purpose, developer-friendly quest framework for Fabric mods and modpacks. It was designed with Project Flint's unusually explicit progression needs in mind, but Project Flint is a consumer of the framework rather than a hardcoded special case. The standalone mod should remain useful to unrelated developers without requiring them to fork or edit Flint Quests source.
 
 The core idea is inspired by the workflow of FTB Quests:
 
@@ -19,7 +17,7 @@ The core idea is inspired by the workflow of FTB Quests:
 - quest definitions are separate from player progress;
 - modpack/mod-specific systems can provide custom task hooks.
 
-Flint Quests is not intended to copy FTB Quests source code or reproduce every feature. It is an independent, much smaller implementation specialized for Project Flint.
+Flint Quests is not intended to copy FTB Quests source code or reproduce every feature. It is an independent framework focused on a clean in-game authoring workflow, portable quest data, and a small public integration API.
 
 ## Primary design rules
 
@@ -32,8 +30,8 @@ Flint Quests is not intended to copy FTB Quests source code or reproduce every f
 3. **The JSON format should remain readable and migration-friendly.**
    Do not serialize arbitrary Java class names or implementation details into quest files.
 
-4. **Project Flint integration should use a tiny public hook surface.**
-   The preferred integration is `FlintQuestHooks.trigger(player, eventId, amount)` rather than Flint Quests reaching into Project Flint classes.
+4. **External integrations use the public API; Flint Quests never reaches into another mod's implementation classes.**
+   New integrations use `FlintQuestAPI` and the optional `flintquests` Fabric entrypoint. `FlintQuestHooks` remains a 1.0 compatibility facade.
 
 5. **Editing is a development feature.**
    It must be possible to disable editing completely in config for release builds.
@@ -41,14 +39,14 @@ Flint Quests is not intended to copy FTB Quests source code or reproduce every f
 6. **The server is the authority for progress.**
    Client UI may display and edit definitions during development, but completion must never rely on a client claiming a task is complete.
 
-7. **Generic tasks should not require changes to Project Flint.**
+7. **Generic tasks should not require mod-specific hooks.**
    Item possession, block breaking, item use and similar generic Minecraft behavior should be detected by Flint Quests itself.
 
-8. **Project-Flint-specific mechanics should use custom events.**
-   Examples: forming the Lumber Processor, completing a Sanding Station recipe, filling the Water Pot, successfully lighting a permanent campfire, completing a grinder operation, or finishing another custom multiblock/process.
+8. **Custom mechanics should use namespaced custom events.**
+   Examples include forming a multiblock, completing a custom machine operation, filling a special container, or successfully completing another mod-specific process.
 
 9. **Flint Quests is an API framework, not a Project Flint hardcode layer.**
-   Any installed mod should be able to use the public event/task-registration surface without editing Flint Quests source. Project Flint is the primary consumer, not a special-case dependency baked into the engine.
+   Any installed mod should be able to register discoverable events and trigger them without editing Flint Quests source. Project Flint is an important first-party consumer, not a special-case dependency baked into the engine.
 
 10. **Quest IDs are always in the fixed `flintquests:` namespace.**
     The editor exposes only the path. Existing quest paths may be renamed, but never by simply saving a second unrelated ID: Flint Quests must use the safe rename path, rewrite dependencies, and preserve progress via `quest_id_migrations.json`.
@@ -355,27 +353,33 @@ The Mod Menu settings screen must follow the same Minecraft 1.21.11 GUI rule as 
 
 Administrative commands are permission-gated.
 
-## Project Flint integration contract
+## Public integration contract (v1.1+)
 
-The public class is:
+The supported public package is:
 
-`com.projectflint.flintquests.api.FlintQuestHooks`
+`com.projectflint.flintquests.api`
 
-Preferred usage from a successful server-side Project Flint action:
+New mods should use `FlintQuestAPI`. `FlintQuestHooks` is retained only as the v1.0 compatibility facade.
+
+Custom-event registration is **discovery metadata**, not an allowlist. Registered events become searchable in the editor with a friendly title, description, provider/mod grouping, optional subgroup, optional icon, and search tags. Unregistered namespaced IDs can still be entered manually and triggered.
+
+The recommended optional-integration mechanism is the Fabric entrypoint key `flintquests`, implemented through `FlintQuestIntegration` and `QuestEventRegistrar`. Flint Quests asks Fabric Loader for that entrypoint only when Flint Quests is present. This avoids requiring unrelated mods to make Flint Quests a hard runtime dependency merely to offer integration metadata.
+
+Custom gameplay actions should trigger from the successful server-side code path:
 
 ```java
-FlintQuestHooks.trigger(serverPlayer, "projectflint:formed_lumber_processor");
+FlintQuestAPI.trigger(serverPlayer, "mymod:formed_multiblock");
 ```
 
-For countable events:
+Countable events use the amount overload. Event IDs must remain stable once released to quest authors.
 
-```java
-FlintQuestHooks.trigger(serverPlayer, "projectflint:processed_wood", 2);
-```
+Flint Quests 1.1 also exposes read-only quest/task progress queries and server-side lifecycle callbacks for task progress, quest completion, and reward claims. Do not expose mutable internal progress maps as API.
 
-Quest definitions can then use a `CUSTOM_EVENT` task with the same string target.
+`docs/API.md` is the authoritative developer-facing API guide.
 
-Keep event IDs stable once released publicly.
+### Project Flint as an API consumer
+
+Project Flint should use the same API as any unrelated mod. Its event IDs may use the `projectflint:` namespace and may register friendly metadata, but no Project Flint implementation classes or event lists belong inside Flint Quests core source.
 
 ## Planned continuation
 
@@ -430,7 +434,7 @@ Candidates:
 - hidden/secret quests;
 - repeatable quests if Project Flint ever needs them.
 
-### v0.5 — Project Flint custom task integration
+### Historical Project Flint integration targets
 
 Add explicit custom events at important Project Flint server-side success points, especially:
 
@@ -446,26 +450,26 @@ Add explicit custom events at important Project Flint server-side success points
 - aquifer/well systems when implemented;
 - future era transitions.
 
-### v0.6 — migration of Project Flint progression
+### Historical Project Flint migration notes
 
 Convert the existing detailed Project Flint advancement/progression instructions into Flint Quests chapters while retaining the explicit "tell the player exactly what to do" philosophy.
 
 Prefer an automated/import-assisted conversion rather than manually rewriting every entry.
 
-### v1.0 — merge-ready
+### v1.x — standalone framework maturity
 
-Before merging into Project Flint:
+Flint Quests remains a standalone, reusable framework. Project Flint may bundle/nest the unmodified Flint Quests jar or integrate through the public API, but the Flint Quests core should not be absorbed into Project Flint in a way that makes unrelated third-party use harder.
+
+1.x priorities:
 
 - networking stable;
 - editor permissions safe;
-- quest data migrations versioned;
-- progress migrations versioned;
+- quest/progress migrations versioned;
 - editor comfortable enough for routine development;
 - player UI polished;
-- Project Flint custom hooks complete;
-- no standalone-only assumptions in paths/package layout that would make integration difficult.
-
-At that point the standalone packages can be moved into Project Flint and the external `flintquests` mod dependency removed.
+- public API documented and source-compatible where practical;
+- Project Flint and unrelated mods use the same integration surface;
+- no consumer-specific implementation classes in Flint Quests core.
 
 ## Things not to do
 
@@ -474,7 +478,7 @@ At that point the standalone packages can be moved into Project Flint and the ex
 - Do not let clients authoritatively complete tasks.
 - Do not hardcode Project Flint implementation classes into the generic quest engine when a custom event can represent the same thing.
 - Do not make the editor mandatory in release builds.
-- Do not turn the format into an FTB Quests clone if a smaller Project-Flint-specific feature is sufficient.
+- Do not turn the format into an FTB Quests clone when a smaller, general-purpose feature solves the authoring need.
 
 
 ## Minecraft 1.21.11 source-compatibility notes
@@ -502,7 +506,7 @@ The following are now permanent Flint Quests UI expectations unless intentionall
 - In edit mode, primary/left click on a quest edits it; right click opens the normal player-facing quest view for quick testing.
 - In edit mode, right click on a category opens its category editor.
 - Player-facing quest details must not expose raw dependency IDs. Dependency relationships may still be represented visually by connector lines on the quest canvas.
-- FTB Quests remains a UI/workflow reference, not a source to clone wholesale. The Flint Quests implementation should stay smaller and Project-Flint-focused.
+- FTB Quests remains a UI/workflow reference, not a source to clone wholesale. The Flint Quests implementation should stay smaller, independent, and focused on developer-friendly quest authoring rather than becoming an FTB Quests clone.
 
 ## v0.1.7-a editor/usability rules
 
@@ -612,10 +616,35 @@ Permanent behavior rules:
 - Baseline theme files are generated only when missing so an author's edits are never silently overwritten.
 
 
-## v0.1.22-a persistent authoring rules
+## v1.0 reward contract
 
-- Editable-data ZIP import must use a native/non-headless file-picker route; do not regress to Swing `JFileChooser`, which can fail inside Minecraft with `HeadlessException`. The picker should begin in the user's Downloads folder when available.
-- An imported collaboration ZIP must validate the Flint Quests editable-data manifest/type/schema and required `quests/` + `categories/` containers before any active quest data is replaced.
-- Built-in theme presets should keep the underlying game visible through translucent background/canvas surfaces. Custom themes remain fully author-controlled.
-- The quest book should remember the last opened selectable category/page between openings and game sessions.
-- Explicit quest requirements belong in the **Rules** tab. Authors must be able to search/select a quest from any category; the existing ALL/ANY dependency mode controls how multiple required quests are evaluated.
+- Rewards are optional and must never be required for quest completion.
+- v1.0 ships with item-stack rewards as the built-in reward type.
+- A quest may have multiple item rewards.
+- Completion and reward claiming are separate states. Completing a quest unlocks its reward; it does not automatically grant it.
+- Reward claiming is server-authoritative. The client only requests a claim; the server verifies quest existence, quest completion, reward presence, and unclaimed state.
+- `rewardClaimed` is stored per quest in player progress and prevents duplicate claims.
+- `Claim All` is category-scoped and only claims completed/unclaimed rewards from the category currently being viewed.
+- Inventory overflow must be dropped at the player rather than silently destroyed.
+- Rewards stay generic to Flint Quests. Project Flint and other integrations do not need to implement reward delivery themselves.
+- Future reward types should extend the reward abstraction without turning arbitrary player commands into a reward mechanism.
+
+## v1.0 zoom rendering rule
+
+Quest node zoom applies to the entire node presentation. The node shape, glow/border, item icon, hitbox, dependency anchors, and spacing must scale together. Item icons must never remain fixed at vanilla 16x16 while the node changes size.
+
+
+## v1.1 public API and custom-event discovery contract
+
+- `com.projectflint.flintquests.api` is the supported public integration package.
+- `FlintQuestAPI` is the primary facade for event registration, triggering, and read-only progress queries.
+- `FlintQuestHooks` remains available for 1.0 source compatibility but should not be the API shown in new examples.
+- The Fabric entrypoint key `flintquests` is the preferred optional registration path for third-party integrations.
+- Event registration metadata supports: stable namespaced event ID, friendly title, description, provider id/name, optional group, optional item icon, and search tags.
+- Event registration is optional. A valid namespaced custom event can still be manually entered and triggered when it is not registered.
+- Conflicting duplicate event registrations keep the first definition and warn instead of allowing load-order replacement.
+- The editor custom-event Search button must search the live registry by ID, title, description, provider, group, and tags. Results are sorted/grouped by provider and group.
+- Custom event names must be mod-agnostic in Flint Quests UI. Do not label the generic type "Flint/Custom Event" or imply that Project Flint owns the extension point.
+- API progress queries return immutable/read-only values. Third-party mods must not receive Flint Quests' mutable save objects.
+- API lifecycle callbacks are server-side and include task progress change, quest completion, and reward claim events.
+- Project Flint and every other integration use the same public surface. Flint Quests core must never import Project Flint gameplay classes.

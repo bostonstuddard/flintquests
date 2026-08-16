@@ -1,10 +1,13 @@
 package com.projectflint.flintquests.engine;
 
+import com.projectflint.flintquests.api.FlintQuestEvents;
+
 import com.projectflint.flintquests.config.ConfigManager;
 import com.projectflint.flintquests.data.CompletionMode;
 import com.projectflint.flintquests.data.QuestDefinition;
 import com.projectflint.flintquests.data.QuestRepository;
 import com.projectflint.flintquests.data.QuestTask;
+import com.projectflint.flintquests.data.QuestReward;
 import com.projectflint.flintquests.data.TaskType;
 import com.projectflint.flintquests.progress.PlayerQuestData;
 import com.projectflint.flintquests.progress.ProgressManager;
@@ -17,6 +20,9 @@ import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.resources.Identifier;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 
@@ -76,7 +82,10 @@ public final class QuestEngine {
                 boolean oldComplete = progress.complete;
                 progress.value = Math.min(amount, task.count);
                 progress.complete = amount >= task.count;
-                changed |= oldValue != progress.value || oldComplete != progress.complete;
+                boolean taskChanged = oldValue != progress.value || oldComplete != progress.complete;
+                changed |= taskChanged;
+                if (taskChanged) FlintQuestEvents.TASK_PROGRESS_CHANGED.invoker()
+                        .onTaskProgressChanged(player, quest.id, task.id, progress.value, progress.complete);
             }
             changed |= tryComplete(player, data, quest, questProgress);
         }
@@ -99,9 +108,15 @@ public final class QuestEngine {
         for (QuestTask task : quest.tasks) {
             if (task.type != TaskType.CHECKMARK) continue;
             TaskProgress progress = questProgress.tasks.computeIfAbsent(task.id, ignored -> new TaskProgress());
-            if (!progress.complete) changed = true;
-            progress.value = 1;
-            progress.complete = true;
+            if (!progress.complete) {
+                changed = true;
+                progress.value = 1;
+                progress.complete = true;
+                FlintQuestEvents.TASK_PROGRESS_CHANGED.invoker()
+                        .onTaskProgressChanged(player, quest.id, task.id, progress.value, true);
+            } else {
+                progress.value = 1;
+            }
         }
         tryComplete(player, data, quest, questProgress);
         if (changed) {
@@ -125,10 +140,60 @@ public final class QuestEngine {
         if (progress.complete) return false;
         progress.value = 1;
         progress.complete = true;
+        FlintQuestEvents.TASK_PROGRESS_CHANGED.invoker()
+                .onTaskProgressChanged(player, quest.id, task.id, progress.value, true);
         tryComplete(player, data, quest, questProgress);
         ProgressManager.save(player);
         QuestNetworking.sendProgress(player);
         return true;
+    }
+
+
+    public static boolean claimReward(ServerPlayer player, String questId) {
+        PlayerQuestData data = ProgressManager.get(player);
+        QuestDefinition quest = QuestRepository.get(questId);
+        if (quest == null || quest.rewards == null || quest.rewards.isEmpty()) return false;
+        QuestProgress progress = data.quests.get(quest.id);
+        if (progress == null || !progress.complete || progress.rewardClaimed) return false;
+
+        grantRewards(player, quest);
+        progress.rewardClaimed = true;
+        FlintQuestEvents.REWARD_CLAIMED.invoker().onRewardClaimed(player, quest.id);
+        ProgressManager.save(player);
+        QuestNetworking.sendProgress(player);
+        return true;
+    }
+
+    public static int claimAllRewards(ServerPlayer player, String categoryId) {
+        if (categoryId == null || categoryId.isBlank()) return 0;
+        PlayerQuestData data = ProgressManager.get(player);
+        int claimed = 0;
+        for (QuestDefinition quest : QuestRepository.all()) {
+            if (!categoryId.equals(quest.chapter) || quest.rewards == null || quest.rewards.isEmpty()) continue;
+            QuestProgress progress = data.quests.get(quest.id);
+            if (progress == null || !progress.complete || progress.rewardClaimed) continue;
+            grantRewards(player, quest);
+            progress.rewardClaimed = true;
+            FlintQuestEvents.REWARD_CLAIMED.invoker().onRewardClaimed(player, quest.id);
+            claimed++;
+        }
+        if (claimed > 0) {
+            ProgressManager.save(player);
+            QuestNetworking.sendProgress(player);
+        }
+        return claimed;
+    }
+
+    private static void grantRewards(ServerPlayer player, QuestDefinition quest) {
+        for (QuestReward reward : quest.rewards) {
+            if (reward == null || reward.count <= 0) continue;
+            Identifier id = Identifier.tryParse(reward.item == null ? "" : reward.item.trim());
+            Item item = id == null ? Items.AIR : BuiltInRegistries.ITEM.getValue(id);
+            if (item == null || item == Items.AIR) continue;
+            ItemStack stack = new ItemStack(item, reward.count);
+            player.getInventory().add(stack);
+            if (!stack.isEmpty()) player.drop(stack, false);
+        }
     }
 
     public static boolean isCompleted(ServerPlayer player, String questId) {
@@ -150,9 +215,13 @@ public final class QuestEngine {
                 if (task.type != type || !task.target.equals(target)) continue;
                 TaskProgress progress = questProgress.tasks.computeIfAbsent(task.id, ignored -> new TaskProgress());
                 int old = progress.value;
+                boolean oldComplete = progress.complete;
                 progress.value = Math.min(task.count, progress.value + amount);
                 progress.complete = progress.value >= task.count;
-                changed |= old != progress.value;
+                boolean taskChanged = old != progress.value || oldComplete != progress.complete;
+                changed |= taskChanged;
+                if (taskChanged) FlintQuestEvents.TASK_PROGRESS_CHANGED.invoker()
+                        .onTaskProgressChanged(player, quest.id, task.id, progress.value, progress.complete);
             }
             changed |= tryComplete(player, data, quest, questProgress);
         }
@@ -181,6 +250,7 @@ public final class QuestEngine {
         if (!complete) return false;
         questProgress.complete = true;
         questProgress.completedAt = System.currentTimeMillis();
+        FlintQuestEvents.QUEST_COMPLETED.invoker().onQuestCompleted(player, quest.id);
         if (ConfigManager.get().announceQuestCompletion) {
             QuestNetworking.notifyCompleted(player, quest.id);
         }

@@ -1,16 +1,34 @@
 # Flint Quests Changelog
 
-## v0.1.22-a — native ZIP picker, translucent presets, remembered category, cross-category requirements
+## v1.1.0 — discoverable developer API framework
 
-- Replaced the Swing/JFileChooser quest-data importer with Minecraft/LWJGL's native file dialog path, avoiding `HeadlessException` while still starting in the user's Downloads folder.
-- Kept strict editable-data ZIP validation: imports must contain the Flint Quests manifest/schema plus required quest/category containers before any live data is touched.
-- Adjusted all built-in theme presets so their main background/canvas surfaces remain translucent instead of covering the world with opaque blocks.
-- Built-in preset files are now refreshed by Flint Quests so preset bug-fixes reach existing installs; custom theme files with their own IDs remain untouched.
-- Added more vertical breathing room above and between settings buttons.
-- The quest book now remembers the last selectable category/page and reopens it next time.
-- Moved explicit required-quest selection into the Rules tab and clarified that required quests may come from any category.
-- Required quests still use ALL/ANY behavior and continue to participate in normal quest unlocking/progression.
-- No Project Flint source changes are required.
+- Added `FlintQuestAPI` as the primary public integration facade for all mods, not just Project Flint.
+- Added a live custom-event registry with friendly title, description, provider id/name, optional group, optional item icon, and search tags.
+- Added the optional Fabric `flintquests` integration entrypoint through `FlintQuestIntegration` + `QuestEventRegistrar`; provider metadata is inferred from the mod that owns the entrypoint.
+- Added direct `FlintQuestAPI.registerEvent(...)` registration for integrations that do not use the entrypoint pattern.
+- Registered custom events are now searchable from the in-game `CUSTOM_EVENT` task picker by ID, title, description, provider, group, and tags. Results are sorted/presented by provider/group and show metadata on hover.
+- Registration remains optional: unregistered namespaced event IDs can still be entered manually and triggered.
+- Renamed the generic editor label from `Flint/Custom Event` to `Custom Event`; Project Flint is a consumer of the extension point, not its owner.
+- Added read-only API progress queries for quest completion, task completion/value, and reward-claimed state.
+- Added `FlintQuestEvents` server-side lifecycle callbacks for task progress changes, quest completion, and reward claiming.
+- Kept `FlintQuestHooks` as a deprecated 1.0 compatibility facade so existing integrations continue to compile and run.
+- Added `docs/API.md` and dedicated v1.1 release notes.
+- Updated mod metadata/README architecture language to describe Flint Quests as a general developer-friendly quest framework designed with Project Flint in mind, not a Project-Flint-specific mod.
+- Existing quest/progress JSON requires no migration.
+
+## v1.0.0 — first stable release
+
+- Promoted Flint Quests from the 0.x development line to the first stable release.
+- Added optional per-quest item rewards. A quest may have zero, one, or multiple reward item stacks.
+- Added a dedicated **Reward** page to the in-game quest editor with searchable item selection, amount editing, multiple rewards, and add/remove navigation.
+- Completed quests with rewards expose a server-authoritative **Claim Reward** button. Rewards cannot be claimed before completion and cannot be claimed twice.
+- Added **Claim All** to each category containing rewards. It claims every completed, unclaimed quest reward in the category currently being viewed.
+- Reward claim state is saved per player and synchronized to the client as part of normal quest progress.
+- Reward delivery first inserts into the player inventory and drops any overflow at the player rather than deleting it.
+- Fixed quest-book zoom so the item icon scales together with its quest node instead of remaining permanently 16x16.
+- Existing quests remain compatible: missing `rewards` data is treated as no reward, and existing player progress treats reward claims as unclaimed until a reward is actually claimed.
+- Kept all editor/dev features behind Developer Environment and retained nestable JAR + editable quest-data ZIP workflows.
+- No Project Flint source changes are required for the v1.0.0 standalone release.
 
 ## v0.1.21-a — Downloads-first import validation + built-in theme presets
 

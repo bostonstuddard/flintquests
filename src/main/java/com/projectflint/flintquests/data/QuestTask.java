@@ -1,5 +1,7 @@
 package com.projectflint.flintquests.data;
 
+import com.projectflint.flintquests.api.FlintQuestAPI;
+
 import java.util.Objects;
 
 public final class QuestTask {
@@ -47,7 +49,9 @@ public final class QuestTask {
             case BREAK_BLOCK -> "Break " + target;
             case USE_ITEM -> "Use " + target;
             case INTERACT_BLOCK -> "Interact with " + target;
-            case CUSTOM_EVENT -> "Complete " + target;
+            case CUSTOM_EVENT -> FlintQuestAPI.getRegisteredEvent(target)
+                    .map(event -> event.title())
+                    .orElse("Complete " + target);
         };
     }
 

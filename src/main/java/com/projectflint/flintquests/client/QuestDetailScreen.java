@@ -4,8 +4,10 @@ import com.projectflint.flintquests.data.CategoryRepository;
 import com.projectflint.flintquests.data.QuestCategoryDefinition;
 import com.projectflint.flintquests.data.QuestDefinition;
 import com.projectflint.flintquests.data.QuestTask;
+import com.projectflint.flintquests.data.QuestReward;
 import com.projectflint.flintquests.data.TaskType;
 import com.projectflint.flintquests.network.QuestCheckmarkC2SPayload;
+import com.projectflint.flintquests.network.QuestClaimRewardC2SPayload;
 import com.projectflint.flintquests.network.QuestProgressRequestC2SPayload;
 import com.projectflint.flintquests.theme.QuestTheme;
 import com.projectflint.flintquests.theme.QuestThemeManager;
@@ -15,6 +17,7 @@ import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
+import net.minecraft.world.item.ItemStack;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -28,6 +31,7 @@ public final class QuestDetailScreen extends Screen {
 	private final Screen parent;
 	private final QuestDefinition quest;
 	private final Map<String, Button> checkmarkButtons = new LinkedHashMap<>();
+	private Button claimRewardButton;
 	private List<DetailPage> pages = List.of();
 	private int pageIndex;
 
@@ -48,6 +52,7 @@ public final class QuestDetailScreen extends Screen {
 	private void refreshPageWidgets() {
 		clearWidgets();
 		checkmarkButtons.clear();
+		claimRewardButton = null;
 
 		DetailLayout layout = layout();
 		pages = buildPages(layout);
@@ -56,15 +61,22 @@ public final class QuestDetailScreen extends Screen {
 
 		DetailPage page = pages.get(pageIndex);
 		for (PlacedBlock placed : page.blocks()) {
-			if (placed.block().type() != BlockType.CHECKMARK || placed.block().task() == null) continue;
-			QuestTask task = placed.block().task();
-			boolean complete = ClientQuestProgress.taskComplete(quest.id, task.id);
-			Button check = Button.builder(checkmarkLabel(task, complete), button -> submitCheckmark(task, button))
-					.bounds(layout.left() + 18, layout.bodyTop() + placed.yOffset(), layout.panelWidth() - 36, 20)
-					.build();
-			check.active = !complete && !ClientQuestProgress.questComplete(quest.id);
-			addRenderableWidget(check);
-			checkmarkButtons.put(task.id, check);
+			if (placed.block().type() == BlockType.CHECKMARK && placed.block().task() != null) {
+				QuestTask task = placed.block().task();
+				boolean complete = ClientQuestProgress.taskComplete(quest.id, task.id);
+				Button check = Button.builder(checkmarkLabel(task, complete), button -> submitCheckmark(task, button))
+						.bounds(layout.left() + 18, layout.bodyTop() + placed.yOffset(), layout.panelWidth() - 36, 20)
+						.build();
+				check.active = !complete && !ClientQuestProgress.questComplete(quest.id);
+				addRenderableWidget(check);
+				checkmarkButtons.put(task.id, check);
+			} else if (placed.block().type() == BlockType.CLAIM_REWARD) {
+				claimRewardButton = Button.builder(claimRewardLabel(), button -> submitClaimReward())
+						.bounds(layout.left() + 18, layout.bodyTop() + placed.yOffset(), layout.panelWidth() - 36, 20)
+						.build();
+				claimRewardButton.active = canClaimReward();
+				addRenderableWidget(claimRewardButton);
+			}
 		}
 
 		int navY = layout.panelBottom() - 25;
@@ -100,6 +112,10 @@ public final class QuestDetailScreen extends Screen {
 			button.setMessage(checkmarkLabel(task, complete));
 			button.active = !complete && !ClientQuestProgress.questComplete(quest.id);
 		}
+		if (claimRewardButton != null) {
+			claimRewardButton.setMessage(claimRewardLabel());
+			claimRewardButton.active = canClaimReward();
+		}
 	}
 
 	private Component checkmarkLabel(QuestTask task, boolean complete) {
@@ -112,6 +128,22 @@ public final class QuestDetailScreen extends Screen {
 		if (minecraft.player == null || ClientQuestProgress.taskComplete(quest.id, task.id)) return;
 		ClientPlayNetworking.send(new QuestCheckmarkC2SPayload(quest.id, task.id));
 		button.active = false;
+	}
+
+	private boolean canClaimReward() {
+		return !quest.rewards.isEmpty() && ClientQuestProgress.questComplete(quest.id) && !ClientQuestProgress.rewardClaimed(quest.id);
+	}
+
+	private Component claimRewardLabel() {
+		if (ClientQuestProgress.rewardClaimed(quest.id)) return Component.literal("Reward Claimed");
+		if (!ClientQuestProgress.questComplete(quest.id)) return Component.literal("Complete Quest to Claim Reward");
+		return Component.literal("Claim Reward");
+	}
+
+	private void submitClaimReward() {
+		if (minecraft.player == null || !canClaimReward()) return;
+		ClientPlayNetworking.send(new QuestClaimRewardC2SPayload(quest.id));
+		if (claimRewardButton != null) claimRewardButton.active = false;
 	}
 
 	@Override
@@ -146,9 +178,17 @@ public final class QuestDetailScreen extends Screen {
 			DetailPage page = pages.get(Math.max(0, Math.min(pageIndex, pages.size() - 1)));
 			for (PlacedBlock placed : page.blocks()) {
 				ContentBlock block = placed.block();
-				if (block.type() != BlockType.TEXT || block.line() == null) continue;
-				graphics.drawString(font, block.line(), layout.left() + block.xOffset(),
-						layout.bodyTop() + placed.yOffset(), block.color(), false);
+				if (block.type() == BlockType.TEXT && block.line() != null) {
+					graphics.drawString(font, block.line(), layout.left() + block.xOffset(),
+							layout.bodyTop() + placed.yOffset(), block.color(), false);
+				} else if (block.type() == BlockType.REWARD_ITEM && block.reward() != null) {
+					QuestReward reward = block.reward();
+					ItemStack stack = QuestIconHelper.stackFor(reward.item);
+					int itemY = layout.bodyTop() + placed.yOffset();
+					graphics.renderItem(stack, layout.left() + 24, itemY);
+					Component rewardText = stack.getHoverName().copy().append(Component.literal(" x" + reward.count));
+					graphics.drawString(font, rewardText, layout.left() + 46, itemY + 4, QuestThemeManager.current().titleTextColor(), false);
+				}
 			}
 		}
 
@@ -203,6 +243,13 @@ public final class QuestDetailScreen extends Screen {
 			appendWrappedBlocks(blocks, state + task.displayLabel() + suffix + optional, textWidth - 6, 24, color);
 			blocks.add(ContentBlock.spacer(4));
 		}
+
+		if (!quest.rewards.isEmpty()) {
+			blocks.add(ContentBlock.spacer(8));
+			blocks.add(ContentBlock.heading(Component.literal("Rewards").getVisualOrderText(), 18, QuestThemeManager.current().accentTextColor(), 18));
+			for (QuestReward reward : quest.rewards) blocks.add(ContentBlock.reward(reward));
+			blocks.add(ContentBlock.claimReward());
+		}
 		return blocks;
 	}
 
@@ -237,24 +284,34 @@ public final class QuestDetailScreen extends Screen {
 	private enum BlockType {
 		TEXT,
 		CHECKMARK,
+		REWARD_ITEM,
+		CLAIM_REWARD,
 		SPACER
 	}
 
-	private record ContentBlock(BlockType type, FormattedCharSequence line, QuestTask task, int xOffset, int color, int height, boolean keepWithNext) {
+	private record ContentBlock(BlockType type, FormattedCharSequence line, QuestTask task, QuestReward reward, int xOffset, int color, int height, boolean keepWithNext) {
 		static ContentBlock text(FormattedCharSequence line, int xOffset, int color, int height) {
-			return new ContentBlock(BlockType.TEXT, line, null, xOffset, color, height, false);
+			return new ContentBlock(BlockType.TEXT, line, null, null, xOffset, color, height, false);
 		}
 
 		static ContentBlock heading(FormattedCharSequence line, int xOffset, int color, int height) {
-			return new ContentBlock(BlockType.TEXT, line, null, xOffset, color, height, true);
+			return new ContentBlock(BlockType.TEXT, line, null, null, xOffset, color, height, true);
 		}
 
 		static ContentBlock checkmark(QuestTask task) {
-			return new ContentBlock(BlockType.CHECKMARK, null, task, 18, 0xFFFFFFFF, CHECKMARK_BLOCK_HEIGHT, false);
+			return new ContentBlock(BlockType.CHECKMARK, null, task, null, 18, 0xFFFFFFFF, CHECKMARK_BLOCK_HEIGHT, false);
+		}
+
+		static ContentBlock reward(QuestReward reward) {
+			return new ContentBlock(BlockType.REWARD_ITEM, null, null, reward, 18, 0xFFFFFFFF, 20, false);
+		}
+
+		static ContentBlock claimReward() {
+			return new ContentBlock(BlockType.CLAIM_REWARD, null, null, null, 18, 0xFFFFFFFF, 26, false);
 		}
 
 		static ContentBlock spacer(int height) {
-			return new ContentBlock(BlockType.SPACER, null, null, 0, 0, height, false);
+			return new ContentBlock(BlockType.SPACER, null, null, null, 0, 0, height, false);
 		}
 	}
 

@@ -11,7 +11,7 @@ for /f "tokens=1,* delims==" %%A in ('findstr /b /c:"mod_version=" "gradle.prope
 for /f "tokens=1,* delims==" %%A in ('findstr /b /c:"archives_base_name=" "gradle.properties"') do set "ARCHIVES_BASE_NAME=%%B"
 for /f "tokens=1,* delims==" %%A in ('findstr /b /c:"minecraft_version=" "gradle.properties"') do set "MINECRAFT_VERSION=%%B"
 
-if not defined MOD_VERSION set "MOD_VERSION=0.1.22-a"
+if not defined MOD_VERSION set "MOD_VERSION=1.1.0"
 if not defined ARCHIVES_BASE_NAME set "ARCHIVES_BASE_NAME=flint-quests"
 if not defined MINECRAFT_VERSION set "MINECRAFT_VERSION=1.21.11"
 

@@ -1,6 +1,8 @@
 package com.projectflint.flintquests.command;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.projectflint.flintquests.api.FlintQuestAPI;
+import com.projectflint.flintquests.api.QuestEventDefinition;
 import com.projectflint.flintquests.config.ConfigManager;
 import com.projectflint.flintquests.data.CategoryRepository;
 import com.projectflint.flintquests.data.QuestDefinition;
@@ -28,6 +30,8 @@ public final class FlintQuestCommands {
 								.executes(context -> list(context.getSource().getPlayerOrException())))
 						.then(Commands.literal("progress")
 								.executes(context -> progress(context.getSource().getPlayerOrException())))
+						.then(Commands.literal("events")
+								.executes(context -> events(context.getSource().getPlayerOrException())))
 						.then(Commands.literal("reload")
 								.requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
 								.executes(context -> reload(context.getSource().getPlayerOrException())))
@@ -48,7 +52,7 @@ public final class FlintQuestCommands {
 	}
 
 	private static int help(ServerPlayer player) {
-		player.displayClientMessage(Component.literal("Flint Quests commands: list, progress, reload, validate, editing <true|false>, reset"), false);
+		player.displayClientMessage(Component.literal("Flint Quests commands: list, progress, events, reload, validate, editing <true|false>, reset"), false);
 		return 1;
 	}
 
@@ -74,6 +78,18 @@ public final class FlintQuestCommands {
 		}
 		if (shown == 0) player.displayClientMessage(Component.literal("No Flint Quests progress recorded yet."), false);
 		return shown;
+	}
+
+	private static int events(ServerPlayer player) {
+		List<QuestEventDefinition> events = FlintQuestAPI.getRegisteredEvents();
+		player.displayClientMessage(Component.literal("Flint Quests: " + events.size() + " registered custom event(s)."), false);
+		for (QuestEventDefinition event : events) {
+			String provider = event.providerName().isBlank() ? event.providerId() : event.providerName();
+			String group = event.group().isBlank() ? "" : " / " + event.group();
+			player.displayClientMessage(Component.literal(event.id() + " - " + event.title()
+					+ (provider.isBlank() ? "" : " [" + provider + group + "]")), false);
+		}
+		return events.size();
 	}
 
 	private static int reload(ServerPlayer player) {

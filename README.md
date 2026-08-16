@@ -1,6 +1,6 @@
 # Flint Quests
 
-Flint Quests is a lightweight Fabric quest framework being developed alongside Project Flint. It is intentionally API-oriented so Project Flint and other mods can integrate custom progression checks without Flint Quests hardcoding their mechanics.
+Flint Quests is a lightweight, developer-friendly Fabric quest framework for any mod or modpack that wants an in-game quest editor and player-facing quest book. It was designed with Project Flint's progression needs in mind, but the core framework contains no Project Flint-specific gameplay logic. Integrations happen through a public, optional API.
 
 ## Target environment
 
@@ -12,7 +12,7 @@ Flint Quests is a lightweight Fabric quest framework being developed alongside P
 - Gradle 9.2.1
 - Mojang mappings
 
-## Current v0.1.18-a features
+## Flint Quests v1.1.0 features
 
 - `J` opens the Flint Quests book.
 - FTB-Quests-inspired item-icon quest canvas.
@@ -23,14 +23,58 @@ Flint Quests is a lightweight Fabric quest framework being developed alongside P
 - Searchable item/block/icon/category/dependency pickers. Item/block search matches both display names and registry IDs.
 - Stable fixed `flintquests:` namespace with safe editable quest-ID paths and progress/dependency migration on rename.
 - Multiple tasks, ALL/ANY rules, optional tasks and prerequisite quests.
+- Optional claimable item rewards with multiple reward stacks per quest, server-authoritative claim state, per-quest **Claim Reward**, and category-wide **Claim All**.
+- Ctrl + mouse-wheel quest-canvas zoom scales node shapes, borders, spacing, dependency anchors, hitboxes, and item icons together.
 - Task types: `OBTAIN_ITEM`, `BREAK_BLOCK`, `USE_ITEM`, `INTERACT_BLOCK`, `CUSTOM_EVENT`, and clickable `CHECKMARK`.
 - Per-player server-authoritative progress in the world save.
 - Client progress synchronization for completed quest/task visualization.
 - Quest node state borders: unlocked = glowing yellow, completed = glowing lime, visible-but-locked = gray; hidden locked quests stay hidden.
 - Quest completion uses a vanilla advancement-style challenge toast with the quest icon/title and challenge-complete sound instead of a Flint Quests chat message.
 - Optional Mod Menu config screen.
-- Public custom-event hook: `FlintQuestHooks.trigger(...)`.
+- Public integration API: `FlintQuestAPI`, searchable custom-event registration, optional `flintquests` Fabric integration entrypoint, read-only progress queries, and lifecycle callbacks.
+- Existing `FlintQuestHooks` integrations remain source-compatible as a deprecated 1.0 compatibility facade.
 - Validation and administrative commands.
+
+## Developer API
+
+Flint Quests 1.1 adds a discoverable custom-event registry. A mod can register friendly metadata once and then trigger the same event ID whenever the gameplay action succeeds. Registered events become searchable from the in-game `CUSTOM_EVENT` task picker, grouped/sorted by provider and optional event group. Unregistered namespaced IDs still work when entered manually.
+
+Recommended optional integration uses the Fabric entrypoint key `flintquests`:
+
+```json
+"entrypoints": {
+  "flintquests": [
+    "com.example.mymod.MyFlintQuestsIntegration"
+  ]
+},
+"suggests": {
+  "flintquests": "*"
+}
+```
+
+```java
+public final class MyFlintQuestsIntegration implements FlintQuestIntegration {
+    @Override
+    public void register(QuestEventRegistrar registrar) {
+        registrar.registerEvent(QuestEventDefinition.builder(
+                        "mymod:activated_machine",
+                        "Activate Machine")
+                .description("Triggered when the player successfully activates the machine.")
+                .group("Machines")
+                .icon("mymod:machine")
+                .tag("activation")
+                .build());
+    }
+}
+```
+
+At the actual successful server-side gameplay point:
+
+```java
+FlintQuestAPI.trigger(player, "mymod:activated_machine");
+```
+
+See `docs/API.md` for the full contract, optional-dependency pattern, query methods and lifecycle callbacks.
 
 ## Editing configuration
 
@@ -59,7 +103,7 @@ Per-player progress:
 
 ## Project Flint integration
 
-No Project Flint source changes are required for v0.1.18-a. Generic tasks are detected by Flint Quests itself. Project Flint integration becomes necessary only when quests need to detect bespoke Flint mechanics such as forming a Lumber Processor or completing a custom workstation process. See `MAIN_MOD_CHANGES.md`.
+Project Flint uses the exact same public API as any other mod. Existing v1.0 `FlintQuestHooks.trigger(...)` calls remain compatible. To make Project Flint-specific events searchable in the v1.1 editor, Project Flint should register friendly event metadata through the optional `flintquests` integration entrypoint. See `MAIN_MOD_CHANGES.md`.
 
 ## Metadata
 
@@ -76,7 +120,7 @@ The builder uses an existing wrapper when present or cached Gradle 9.2.1 under `
 
 Expected output:
 
-`build/libs/flint-quests-0.1.18-a.jar`
+`build/libs/flint-quests-1.1.0.jar`
 
 See `FLINT_QUESTS.md` for the long-term design contract.
 
@@ -143,9 +187,10 @@ Flint Quests creates several editable baseline themes in `config/flintquests/the
 Developer Environment users can export/import editable quest-data ZIPs. Import starts in the user's Downloads folder and validates the Flint Quests marker/schema before replacing the active quest project. See `docs/QUEST_DATA_ZIP.md`.
 
 
-## v0.1.22-a authoring notes
+## Rewards (v1.0)
 
-- **Import Quest Data ZIP** uses a native file picker that starts in Downloads and rejects archives without the Flint Quests editable-data manifest/schema and required containers.
-- Built-in themes are translucent by default. Custom themes should use a unique filename/ID; built-in preset IDs are maintained by Flint Quests.
-- The quest book remembers the last opened category.
-- The **Rules** tab can add required quests from any category and apply ALL/ANY logic to them.
+Rewards are optional. A quest may define no rewards or one/more item rewards. Once the quest is complete, the player can claim the reward from the quest detail page. Reward claims are server-authoritative and saved per player.
+
+The currently viewed category also exposes **Claim All** whenever that category contains rewards. Claim All only processes quests that are complete, have rewards, and have not already been claimed. Inventory overflow is dropped at the player rather than discarded.
+
+Quest authors configure rewards from the quest editor's **Reward** tab using the searchable item picker and amount field.

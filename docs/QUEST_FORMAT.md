@@ -74,7 +74,7 @@ Treat `id` and every task's `id` as save-data identifiers. Titles/descriptions c
 
 For registry-backed task types, use full registry IDs such as `minecraft:stick` or `projectflint:sanding_station`.
 
-For `CUSTOM_EVENT`, use a stable namespaced event ID agreed on by the emitting mod and the quest definition.
+For `CUSTOM_EVENT`, use a stable namespaced event ID agreed on by the emitting mod and the quest definition. Flint Quests 1.1 lets mods register friendly metadata for these IDs through `FlintQuestAPI` / the optional `flintquests` integration entrypoint; registered events become searchable in the editor. Registration is discovery metadata only, so manually entered unregistered namespaced IDs remain valid. See `docs/API.md`.
 
 ## Category metadata — v0.1.6-a
 
@@ -177,3 +177,23 @@ Examples:
 ```
 
 Supported codes are colors `0-9` and `a-f`, formatting `k-o`, and reset `r`. Editor text boxes preserve the literal source codes; rendering converts them into styled Minecraft Components.
+
+
+## Rewards
+
+Rewards are optional. Omitting `rewards` or using an empty list means the quest has no claimable reward.
+
+```json
+"rewards": [
+  {
+    "item": "minecraft:diamond",
+    "count": 2
+  },
+  {
+    "item": "minecraft:bread",
+    "count": 4
+  }
+]
+```
+
+Reward completion is stored separately from quest completion in player progress. A completed quest with rewards remains claimable until its reward is claimed.

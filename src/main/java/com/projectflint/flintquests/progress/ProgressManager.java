@@ -122,6 +122,7 @@ public final class ProgressManager {
 
 	private static void merge(QuestProgress target, QuestProgress source) {
 		target.complete |= source.complete;
+		target.rewardClaimed |= source.rewardClaimed;
 		if (target.completedAt == 0L || (source.completedAt > 0L && source.completedAt < target.completedAt)) {
 			target.completedAt = source.completedAt;
 		}

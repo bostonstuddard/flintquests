@@ -1,20 +1,21 @@
-# Flint Quests v0.1.22-a — Build Status
+# Flint Quests v1.1.0 — Compile Fix
 
-## Status
+## Fixed compiler error
 
-Source patch prepared for the Minecraft 1.21.11 / Fabric baseline used by Flint Quests.
+`SearchSelectScreen` passed a `List<Component>` to `GuiGraphics#setTooltipForNextFrame(...)`, but Minecraft 1.21.11's mapped overload expects formatted character sequences for that overload.
 
-The included `build.bat` remains the authoritative local compile gate and automatically closes after a successful build while pausing on failures.
+The custom-event search tooltip now uses Minecraft's dedicated component-list method:
 
-## v0.1.22-a focus
+```java
+graphics.setComponentTooltipForNextFrame(font, tooltip, mouseX, mouseY);
+```
 
-- native Downloads-first quest-data ZIP picker without Swing/AWT chooser dependence;
-- strict Flint Quests data-ZIP schema/container validation before replacement;
-- translucent built-in theme backgrounds/canvases;
-- improved settings spacing;
-- remembered last quest-book category/page;
-- explicit cross-category required-quest selector in the Rules tab.
+This preserves multi-line `Component` tooltips and matches the 1.21.11 GUI API.
 
-## Project Flint requirement
+## Version
 
-**No Project Flint source changes are required for v0.1.22-a.**
+The release remains **v1.1.0** because this is a compile correction for the not-yet-successfully-built v1.1.0 source, not a new feature release.
+
+## Project Flint changes
+
+None required for this compile fix.
